@@ -75,13 +75,31 @@
     .forEach(ev => origAdd.call(window, ev, stopEvent, true));
 
   // ---- 5. 自动恢复：真实处于后台时，若视频仍被暂停（如心跳看门狗），自动重新播放 ----
-  // 只在“真实后台”时恢复：用户在前台手动点暂停不会被干扰
+  // 用户主动暂停要记住，切到后台后不能再播回去。页面可见时的暂停，或带有用户激活的暂停，都算主动。
+  // 看门狗在后台用定时器调用 pause()，此时页面已隐藏且没有用户激活，不记入。
+  const userPaused = new WeakSet();
+  const byUser = () => {
+    const activation = navigator.userActivation;
+    return !reallyHidden() || !!(activation && activation.isActive);
+  };
+  origAdd.call(document, 'pause', (e) => {
+    if (e.target instanceof HTMLMediaElement && byUser()) {
+      userPaused.add(e.target);
+      log('user pause');
+    }
+  }, true);
+  origAdd.call(document, 'play', (e) => {
+    if (e.target instanceof HTMLMediaElement && byUser()) userPaused.delete(e.target);
+  }, true);
+
   if (AUTO_RESUME) {
     setInterval(() => {
       if (!reallyHidden()) return;
       document.querySelectorAll('video').forEach(v => {
+        if (userPaused.has(v)) return;
         if (v.paused && !v.ended && v.currentTime > 0 && v.readyState > 1) {
-          v.play().then(() => log('auto-resumed')).catch(() => {});
+          const play = v.play();
+          if (play && play.then) play.then(() => log('auto-resumed')).catch(() => {});
         }
       });
     }, RESUME_INTERVAL);

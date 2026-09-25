@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "雨课堂视频防暂停",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "阻止雨课堂视频在切换标签页或最小化浏览器时自动暂停（在页面脚本运行前注入，伪装可见性并拦截暂停事件）",
   "content_scripts": [
     {
