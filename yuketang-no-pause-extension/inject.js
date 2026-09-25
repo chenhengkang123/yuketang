@@ -1,6 +1,4 @@
-/* 雨课堂视频防暂停 —— 主世界注入脚本（document_start）
- * 与 yuketang-no-pause.user.js 逻辑一致
- */
+/* 雨课堂视频防暂停 —— 主世界注入脚本（document_start） */
 (function () {
   'use strict';
 
