@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-Two Chrome extensions for Yuketang (雨课堂, yuketang.cn). There is no build system, no dependencies, and no test suite — plain vanilla JS only. There is no userscript.
+Three Chrome extensions for Yuketang (雨课堂, yuketang.cn). There is no build system, no dependencies, and no test suite — plain vanilla JS only. There is no userscript. The answer-check bank (`bank.js`) is generated from `BUAA-Engineering-Ethics/` by `yuketang-answer-check-extension/build-bank.py`.
 
 ## Project layout
 
 - `yuketang-no-pause-extension/` — Chrome Manifest V3 extension. `inject.js` runs in `world: "MAIN"` at `document_start`, so it shares the page's JS realm and can patch prototypes before Yuketang's scripts load. This is the only anti-pause implementation.
 - `yuketang-auto-next-extension/` — Chrome Manifest V3 extension. When a learning-space (`/ai-workspace/lms-graph/.../video/...`) video finishes, `inject.js` clicks the top-right next-unit arrow (`.unit-arrow.arrow-reverse`). SPA navigation is tracked by polling `location.href`; unit type is told apart by the URL (`/video/` vs homework `/exercise/`). Homework/non-video units are auto-skipped by default until the next video unit (`SKIP_NON_VIDEO = false` stops there instead); a `navPending` guard keeps the 1s poll from scheduling duplicate next-clicks while a navigation is in flight, and a click that doesn't navigate within `NAV_RETRY_DELAY` is retried up to `NAV_MAX_RETRIES` times (the next-unit button isn't wired up yet on first page load) before giving up as "last unit". Runs as a plain `document_idle` content script. A page switch (bottom-left, also `Alt+N`) persists in `localStorage` key `yuketang-auto-next` (`'0'` off, default on). "本集后停" lives in `sessionStorage` key `yuketang-auto-next-stop` and cancels only the next end-of-video advance.
+- `yuketang-answer-check-extension/` — Chrome Manifest V3 extension for homework answer checking. `bank.js` + `inject.js` run in `world: "MAIN"` at `document_start` so they can wrap `fetch`/`XHR` before the exercise list returns. On `/ai-workspace/.../exercise/` (and cloud exercise URLs) it normalizes CJK radical anti-crawl glyphs, fuzzy-matches the current stem against the local BUAA Engineering Ethics bank (303 items), and paints a bottom-right overlay plus option outlines. It never clicks choices or calls the submit API. Toggle lives in `localStorage` key `yuketang-answer-check` (`'0'` off, default on); shortcut `Alt+A`.
 - `analysis/` — **Reference only, never edit or execute.** Minified single-line webpack bundles (`rainweb` chunks) downloaded from Yuketang's site for reverse-engineering. `27437.js` contains the player code the script defends against; grep it for `winTriggerHidden` to see the actual pause logic. These files are ~0.5–1.4 MB on one line — always grep/search them, never Read them whole.
 
 ## Critical maintenance rule
 
-Edit each extension on its own: anti-pause is `yuketang-no-pause-extension/inject.js`, auto-next is `yuketang-auto-next-extension/inject.js`. They do not share a source file.
+Edit each extension on its own: anti-pause is `yuketang-no-pause-extension/inject.js`, auto-next is `yuketang-auto-next-extension/inject.js`, answer-check is `yuketang-answer-check-extension/inject.js` (regenerate `bank.js` with `build-bank.py` after updating `BUAA-Engineering-Ethics/题库.txt`). They do not share a source file.
 
 ## How the anti-pause script works (5 layers)
 
@@ -30,8 +31,8 @@ Layer 5's "really in background" check depends on layer 1's ordering subtlety: t
 
 ## Configuration
 
-Anti-pause config is at the top of `yuketang-no-pause-extension/inject.js`: `AUTO_RESUME`, `RESUME_INTERVAL` (ms), `DEBUG` (console logging).
+Anti-pause config is at the top of `yuketang-no-pause-extension/inject.js`: `AUTO_RESUME`, `RESUME_INTERVAL` (ms), `DEBUG` (console logging). Answer-check config is at the top of `yuketang-answer-check-extension/inject.js`: `MATCH_THRESHOLD`, `POLL_INTERVAL`, `DEBUG`.
 
 ## Testing
 
-Manual only. `chrome://extensions` → Developer mode → Load unpacked → select `yuketang-no-pause-extension/` or `yuketang-auto-next-extension/`. Open a Yuketang video, switch tabs, and verify playback continues. Debug by setting `DEBUG = true` and watching the console for `[雨课堂防暂停]` lines.
+Manual only. `chrome://extensions` → Developer mode → Load unpacked → select `yuketang-no-pause-extension/`, `yuketang-auto-next-extension/`, or `yuketang-answer-check-extension/`. Open a Yuketang video, switch tabs, and verify playback continues. Debug by setting `DEBUG = true` and watching the console for `[雨课堂防暂停]` / `[雨课堂自动连播]` / `[雨课堂对答案]` lines.

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "雨课堂作业对答案",
+  "version": "1.0.0",
+  "description": "在雨课堂学习空间作业页，从本地工程伦理题库匹配当前题目并显示参考答案（只展示，不代答、不提交）",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.yuketang.cn/ai-workspace/*",
+        "*://*.yuketang.cn/v2/web/cloud/student/exercise*"
+      ],
+      "js": ["bank.js", "inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
