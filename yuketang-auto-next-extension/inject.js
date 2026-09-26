@@ -9,7 +9,8 @@
   const POLL_INTERVAL = 1000;    // 轮询间隔(ms)
   const END_GRACE = 5;           // 距结尾多少秒视为播完(ended 事件的兜底；雨课堂有时差几秒就停住)
   const NEXT_DELAY = 1500;       // 播完后延迟多久点下一单元(ms)，给完成上报留时间
-  const NAV_TIMEOUT = 15000;     // 点击后等待 URL 变化的超时(ms)，超时视为已是最后单元
+  const NAV_RETRY_DELAY = 3000;  // 点击后等待跳转的时间(ms)，超时重试点下一单元
+  const NAV_MAX_RETRIES = 3;     // 最多重试次数(首次打开页面时按钮可能尚未就绪)，仍不跳转才视为已是最后单元
   const SKIP_NON_VIDEO = true;   // true: 作业等非视频单元自动跳过；false: 停下等人工处理
   const MAX_NON_VIDEO_HOPS = 10; // 连续跳过非视频单元的上限，防失控
   const AUTO_PLAY = true;        // 自动进入的新视频单元若未自动播放，尝试 play()
@@ -35,6 +36,7 @@
     playTries: 0,           // 当前 URL 已尝试自动播放次数(最多 3 次，避免和手动暂停打架)
     hops: 0,                // 连播链中连续经过的非视频单元数
     navTimer: null,         // 等待跳转的超时定时器
+    navRetries: 0,          // 点击后未跳转的已重试次数
   };
 
   function toast(msg) {
@@ -115,17 +117,17 @@
   }, true);
 
   // 下一单元：优先点页面右上角 ">" 箭头(.unit-arrow.arrow-reverse，上一个是不带 arrow-reverse 的同款图标)；
-  // 兜底用侧边栏目录中当前高亮项(.leaf-item.is-active)的下一个 .leaf-item
+  // 兜底用侧边栏目录中当前高亮项(.leaf-item.is-active)的下一个 .leaf-item。
+  // 首次打开页面时 DOM 里可能先渲染出占位/隐藏元素，只点可见的。
+  const clickable = (el) => !!(el && (el.offsetWidth > 0 || el.offsetHeight > 0));
+
   function clickNextUnit() {
-    const arrow = document.querySelector('.learning-space-control-unit .unit-arrow.arrow-reverse')
-      || document.querySelector('.control-right .unit-arrow.arrow-reverse');
+    const arrow = [...document.querySelectorAll('.learning-space-control-unit .unit-arrow.arrow-reverse, .control-right .unit-arrow.arrow-reverse')]
+      .find(clickable);
     if (arrow) { arrow.click(); return 'arrow'; }
-    const cur = document.querySelector('.leaf-item.is-active');
-    if (cur) {
-      const leaves = [...document.querySelectorAll('.leaf-item')];
-      const next = leaves[leaves.indexOf(cur) + 1];
-      if (next) { next.click(); return 'sidebar'; }
-    }
+    const leaves = [...document.querySelectorAll('.leaf-item')].filter(clickable);
+    const cur = leaves.findIndex(el => el.classList.contains('is-active'));
+    if (cur >= 0 && leaves[cur + 1]) { leaves[cur + 1].click(); return 'sidebar'; }
     return null;
   }
 
@@ -135,6 +137,11 @@
       state.navPending = false;
       return;
     }
+    state.navRetries = 0;
+    attemptNav(reason);
+  }
+
+  function attemptNav(reason) {
     const from = location.pathname;
     const how = clickNextUnit();
     if (!how) {
@@ -145,17 +152,25 @@
       return;
     }
     state.chain = true;
-    log(`已点下一单元(${how})，原因：${reason}`);
-    toast('自动连播：进入下一单元');
+    if (state.navRetries === 0) {
+      log(`已点下一单元(${how})，原因：${reason}`);
+      toast('自动连播：进入下一单元');
+    } else {
+      log(`点击后未跳转，重试点下一单元(${state.navRetries}/${NAV_MAX_RETRIES})`);
+    }
     clearTimeout(state.navTimer);
     state.navTimer = setTimeout(() => {
-      if (location.pathname === from) {
-        state.chain = false;
-        state.navPending = false;
-        log('点击后未跳转，可能已是最后一个单元');
-        toast('自动连播：已是最后一个单元');
+      if (location.pathname !== from) return; // 已跳转，交给轮询重置状态
+      if (isEnabled() && state.navRetries < NAV_MAX_RETRIES) {
+        state.navRetries++;
+        attemptNav(reason);
+        return;
       }
-    }, NAV_TIMEOUT);
+      state.chain = false;
+      state.navPending = false;
+      log('多次点击后仍未跳转，可能已是最后一个单元');
+      toast('自动连播：已是最后一个单元');
+    }, NAV_RETRY_DELAY);
   }
 
   setInterval(() => {
@@ -166,6 +181,7 @@
       state.lastUrl = location.href;
       state.firedUrl = null;
       state.navPending = false;
+      state.navRetries = 0;
       if (isVideoUnit()) state.hops = 0;
     }
 

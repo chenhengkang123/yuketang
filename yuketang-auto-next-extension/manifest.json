@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "雨课堂视频播完自动下一单元",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "雨课堂学习空间视频播完后自动点击「下一单元」连续播放；遇作业等非视频单元自动停止（可配置跳过）",
   "content_scripts": [
     {
