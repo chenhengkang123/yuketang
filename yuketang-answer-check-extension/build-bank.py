@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse BUAA-Engineering-Ethics 题库.txt (+ encoded twin) into bank.js."""
+"""Parse course 题库.txt files into bank.js (工程伦理 + 人工智能安全与伦理 + 中国式现代化)."""
 from __future__ import annotations
 
 import json
@@ -8,18 +8,60 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
-SRC_DIR = REPO / "BUAA-Engineering-Ethics"
-STD_PATH = SRC_DIR / "题库.txt"
-ENC_PATH = SRC_DIR / "题库-存在编码问题.txt"
 OUT_PATH = ROOT / "bank.js"
 
 SPLIT = "----------------------------------------"
 STEM_NUM = re.compile(r"^\d+\.\s*")
 OPT_LINE = re.compile(r"^(?:([A-E])|true|false)[\.、．]\s*(.*)$", re.I)
 LECTURE = re.compile(r"^第\d+讲")
+CHAPTER = re.compile(r"^第[一二三四五六七八九十\d]+\s*章")
+CLOSING = re.compile(r"^结语$")
+CN_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+
+COURSES = [
+    {
+        "id": "ethics",
+        "dir": REPO / "BUAA-Engineering-Ethics",
+        "std": "题库.txt",
+        "enc": "题库-存在编码问题.txt",
+        "expect": 303,
+    },
+    {
+        "id": "ai",
+        "dir": REPO / "BUAA-AI-Security-and-Ethics",
+        "std": "题库.txt",
+        "enc": None,
+        "expect": 280,
+    },
+    {
+        "id": "modern",
+        "dir": REPO / "BUAA-Chinese-Modernization",
+        "std": "题库.txt",
+        "enc": None,
+        "expect": 370,
+    },
+]
 
 
-def parse_file(path: Path, lectures_from_headers: bool) -> list[dict]:
+def chapter_num(token: str) -> int:
+    if token.isdigit():
+        return int(token)
+    return CN_NUM.get(token, 0)
+
+
+def normalize_unit(header: str, course: str) -> str:
+    raw = header.strip()
+    if course != "ai":
+        return raw
+    m = re.match(r"^第([一二三四五六七八九十\d]+)\s*章\s*[-—–]?\s*(.*)$", raw)
+    if not m:
+        return raw
+    n = chapter_num(m.group(1))
+    title = re.sub(r"\s+", " ", m.group(2)).strip(" -—–")
+    return f"第{n:02d}章 {title}"
+
+
+def parse_file(path: Path, headers: bool, course: str) -> list[dict]:
     text = path.read_text(encoding="utf-8")
     items: list[dict] = []
     lecture = ""
@@ -30,8 +72,8 @@ def parse_file(path: Path, lectures_from_headers: bool) -> list[dict]:
         lines = [ln.rstrip() for ln in block.splitlines() if ln.strip()]
         if not lines:
             continue
-        if lectures_from_headers and LECTURE.match(lines[0]):
-            lecture = lines[0].strip()
+        if headers and (LECTURE.match(lines[0]) or CHAPTER.match(lines[0]) or CLOSING.match(lines[0])):
+            lecture = normalize_unit(lines[0], course)
             lines = lines[1:]
             if not lines:
                 continue
@@ -67,6 +109,8 @@ def parse_file(path: Path, lectures_from_headers: bool) -> list[dict]:
 
 
 def classify(answer_raw: str, options: list[dict]) -> tuple[str, list[str], list[str]]:
+    if not options:
+        return "fill", [answer_raw], [answer_raw]
     raw = answer_raw.replace(" ", "")
     if raw in ("✔", "正确"):
         return "judge", ["true"], ["正确"]
@@ -79,12 +123,20 @@ def classify(answer_raw: str, options: list[dict]) -> tuple[str, list[str], list
     return qtype, keys, texts
 
 
-def main() -> None:
-    std = parse_file(STD_PATH, lectures_from_headers=True)
-    enc = parse_file(ENC_PATH, lectures_from_headers=False)
-    if len(std) != 303:
-        raise SystemExit(f"expected 303 standard items, got {len(std)}")
+def build_course(spec: dict) -> list[dict]:
+    std_path = spec["dir"] / spec["std"]
+    if not std_path.exists():
+        raise SystemExit(f"missing {std_path}")
+    std = parse_file(std_path, headers=True, course=spec["id"])
+    if spec["expect"] and len(std) != spec["expect"]:
+        raise SystemExit(f"{spec['id']}: expected {spec['expect']} items, got {len(std)}")
+    enc: list[dict] = []
+    if spec["enc"]:
+        enc_path = spec["dir"] / spec["enc"]
+        if enc_path.exists():
+            enc = parse_file(enc_path, headers=False, course=spec["id"])
     bank = []
+    counts: dict[str, int] = {}
     for i, item in enumerate(std):
         qtype, keys, texts = classify(item["answerRaw"], item["options"])
         alts = []
@@ -92,10 +144,12 @@ def main() -> None:
             alt = enc[i]["stem"]
             if alt and alt != item["stem"]:
                 alts.append(alt)
+        lec = item["lecture"]
+        counts[lec] = counts.get(lec, 0) + 1
         bank.append({
-            "i": i + 1,
-            "lec": item["lecture"],
-            "no": i + 1,  # overwritten below per-lecture
+            "c": spec["id"],
+            "lec": lec,
+            "no": counts[lec],
             "type": qtype,
             "stem": item["stem"],
             "alts": alts,
@@ -103,13 +157,21 @@ def main() -> None:
             "ans": keys,
             "ansT": texts,
         })
+    return bank
 
-    # per-lecture numbering matching the txt file
-    counts: dict[str, int] = {}
-    for q in bank:
-        lec = q["lec"]
-        counts[lec] = counts.get(lec, 0) + 1
-        q["no"] = counts[lec]
+
+def main() -> None:
+    bank: list[dict] = []
+    for spec in COURSES:
+        part = build_course(spec)
+        for q in part:
+            q["i"] = len(bank) + 1
+            bank.append(q)
+        units = {}
+        for q in part:
+            units[q["lec"]] = units.get(q["lec"], 0) + 1
+        print(f"{spec['id']}: {len(part)} questions")
+        print("  " + ", ".join(f"{k}={v}" for k, v in units.items()))
 
     OUT_PATH.write_text(
         "/* generated by build-bank.py — do not edit by hand */\n"
@@ -119,7 +181,6 @@ def main() -> None:
         encoding="utf-8",
     )
     print(f"wrote {OUT_PATH.name}: {len(bank)} questions, {OUT_PATH.stat().st_size} bytes")
-    print("lectures:", ", ".join(f"{k}={v}" for k, v in counts.items()))
 
 
 if __name__ == "__main__":

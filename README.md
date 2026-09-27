@@ -6,7 +6,7 @@
 |---|---|---|
 | [视频防暂停](yuketang-no-pause-extension/README.md) | 切标签页或最小化后视频继续播放 | `yuketang-no-pause-extension/` |
 | [播完自动下一单元](yuketang-auto-next-extension/README.md) | 视频播完自动进入下一单元，作业等非视频单元可自动跳过 | `yuketang-auto-next-extension/` |
-| [作业对答案](yuketang-answer-check-extension/README.md) | 打开作业后对照本地工程伦理题库，显示当前题参考答案 | `yuketang-answer-check-extension/` |
+| [作业对答案](yuketang-answer-check-extension/README.md) | 打开作业后对照本地工程伦理 / 人工智能安全与伦理 / 中国式现代化题库，显示当前题参考答案 | `yuketang-answer-check-extension/` |
 
 三个都是 Chrome 扩展，可以同时启用。
 

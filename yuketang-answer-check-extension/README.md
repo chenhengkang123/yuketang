@@ -1,10 +1,16 @@
 # 雨课堂作业对答案（yuketang-answer-check）
 
-在[雨课堂](https://www.yuketang.cn)学习空间作业页（`/exercise/`）自动对照本地**工程伦理**题库，把当前题的参考答案显示在右下角，方便核对。
+在[雨课堂](https://www.yuketang.cn)学习空间作业页（`/exercise/`）自动对照本地题库，把当前题的参考答案显示在右下角，方便核对。
 
-只提供 Chrome 扩展。脚本**只展示答案，不会点选项、不会调用提交接口**。
+只提供 Chrome 扩展。选择题（含判断）会自动选中正确选项，填空题会写入空格。脚本**不会点提交**。
 
-题库来自 [TonyYu02/BUAA-Engineering-Ethics](https://github.com/TonyYu02/BUAA-Engineering-Ethics)（15 讲共 303 题），已打进扩展的 `bank.js`。
+题库已打进扩展的 `bank.js`：
+
+- [TonyYu02/BUAA-Engineering-Ethics](https://github.com/TonyYu02/BUAA-Engineering-Ethics)（15 讲共 303 题，单选/多选/判断）
+- [taotaoboom/buaa_AI-Security-and-Ethics](https://github.com/taotaoboom/buaa_AI-Security-and-Ethics)（6 章共 280 题，多为填空）
+- [pridezzh/buaa-chinese-modernization](https://github.com/pridezzh/buaa-chinese-modernization)（9 讲 + 结语共 370 题，单选/多选/判断）
+
+打开作业时按课程名区分（工程伦理 / 人工智能安全与伦理 / 中国式现代化）。工程伦理和中国式现代化按「第 N 讲 + 题号」对照，人工智能安全与伦理按「第 N 章 + 题号」对照；第 10 讲及以后只有工程伦理。
 
 > 可与 [视频防暂停](../yuketang-no-pause-extension)、[播完自动下一单元](../yuketang-auto-next-extension) 同时启用。对答案面板在右下角，连播开关在左下角，互不挡住。
 
@@ -12,10 +18,10 @@
 
 1. **题在哪**：学习空间作业是外层壳 + 同源 iframe（`.exercise-iframe`，地址 `/v2/web/iframe-exercise/...`）。脚本从 iframe 里读当前题。
 2. **题干为什么对不上字**：雨课堂用加密字体（`exam-data-decrypt-font`），DOM 里是乱码，屏幕上才是正常汉字。所以不能只靠题干字符串。
-3. **怎么对上**：明文还在 —— 标题「第1讲 … 习题」和题号「4.单选题」。用 **讲次 + 题号** 对照题库（本课作业顺序与题库一致）。题干若能对上（未加密时）仍优先用题干。
-4. **怎么展示**：右下角浮层显示参考答案；能对上的选项加绿框。选项被打乱时以面板里的选项正文为准。
+3. **怎么对上**：明文还在 —— 标题「第一讲：习题」（中文数字）/「第1章 … 习题」/「结语：习题」和题号「4.单选题」。用 **讲次、章次或结语 + 题号** 对照对应课程题库（本课作业顺序与题库一致）。题干若能对上（未加密时）仍优先用题干。
+4. **怎么展示**：右下角浮层显示参考答案；选择题能对上的选项加绿框，并把正确选项写入当前题的本地答案（单选、多选、判断，和页面选项共用的那个字段）。填空题会把参考答案写入 `input.blank-item-dynamic` 空格。两种都**不会点提交**。页面插入的假选项（`data-risk-target="decoy"`）会被跳过。选项被打乱时以选项上的 A/B/C 键为准，面板里仍显示选项正文。
 
-切题不刷新页面（SPA），脚本 0.8 秒轮询一次 URL 和题干。控制台有 `[雨课堂对答案]` 日志。
+切题不刷新页面（SPA），脚本约 0.4 秒轮询一次题号，并监听 iframe DOM。控制台有 `[雨课堂对答案]` 日志。
 
 右下角按钮可随时关掉，记在 `localStorage`（`yuketang-answer-check`，`'0'` 为关，缺省开）。快捷键 `Alt+A`。
 
@@ -30,13 +36,13 @@
 
 ## 更新题库
 
-若 `BUAA-Engineering-Ethics/题库.txt` 有更新：
+若 `BUAA-Engineering-Ethics/题库.txt`、`BUAA-AI-Security-and-Ethics/题库.txt` 或 `BUAA-Chinese-Modernization/题库.txt` 有更新：
 
 ```bash
 python3 yuketang-answer-check-extension/build-bank.py
 ```
 
-会重写 `bank.js`。扩展页刷新该扩展后再刷新作业页。
+会重写 `bank.js`（三门课合计）。扩展页刷新该扩展后再刷新作业页。
 
 ## 配置
 
@@ -45,7 +51,9 @@ python3 yuketang-answer-check-extension/build-bank.py
 | 配置 | 默认 | 说明 |
 |---|---|---|
 | `MATCH_THRESHOLD` | `0.42` | 模糊匹配下限；题干子串命中视为满分 |
-| `POLL_INTERVAL` | `800` | 切题检测间隔(ms) |
+| `POLL_INTERVAL` | `400` | 切题检测间隔(ms) |
+| `AUTO_FILL_BLANK` | `true` | 填空题自动写入空格，不点提交 |
+| `AUTO_SELECT_CHOICE` | `true` | 选择题自动选中正确选项，不点提交 |
 | `DEBUG` | `true` | 控制台日志开关 |
 
 ## 兼容性
